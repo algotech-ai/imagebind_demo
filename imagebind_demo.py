@@ -24,10 +24,11 @@ model.eval()
 model.to(device)
 
 # Load data
+# clip_duration & clips_per_video from resource duration
 inputs = {
     ModalityType.TEXT: data.load_and_transform_text(text_list, device),
-    ModalityType.VISION: data.load_and_transform_video_data(video_paths, device),
-    ModalityType.AUDIO: data.load_and_transform_audio_data(audio_paths, device),
+    ModalityType.VISION: data.load_and_transform_video_data(video_paths, device, clip_duration=2, clips_per_video=10),
+    ModalityType.AUDIO: data.load_and_transform_audio_data(audio_paths, device, clip_duration=2, clips_per_video=10),
 }
 
 with torch.no_grad():
@@ -39,21 +40,21 @@ print(embeddings[ModalityType.AUDIO])
 
 # 计算余弦相似度（自动处理批量维度）
 video_cos_sim = F.cosine_similarity(embeddings[ModalityType.VISION][0], embeddings[ModalityType.VISION][1], dim=-1)
-
+video_cos_sim = video_cos_sim.cpu().item()
 # 余弦距离 = 1 - 余弦相似度
 video_cos_distance = 1 - video_cos_sim
 
-print(f"video cos Similarity: {video_cos_sim.item():.4f}")
-print(f"video cos Distence: {video_cos_distance.item():.4f}")
+print(f"video cos Similarity: {video_cos_sim:.4f}")
+print(f"video cos Distence: {video_cos_distance:.4f}")
 
 # 计算余弦相似度（自动处理批量维度）
 audio_cos_sim = F.cosine_similarity(embeddings[ModalityType.AUDIO][0], embeddings[ModalityType.AUDIO][1], dim=-1)
-
+audio_cos_sim = audio_cos_sim.cpu().item()
 # 余弦距离 = 1 - 余弦相似度
 audio_cos_distance = 1 - audio_cos_sim
 
-print(f"audio cos Similarity: {audio_cos_sim.item():.4f}")
-print(f"audio cos Distence: {audio_cos_distance.item():.4f}")
+print(f"audio cos Similarity: {audio_cos_sim:.4f}")
+print(f"audio cos Distence: {audio_cos_distance:.4f}")
 
 video_score_weight = 0.4
 audio_score_weight = 0.4
@@ -61,10 +62,14 @@ runtime_weight = 0.2
 
 base_runtime = 10
 random_runtime = round(random.uniform(5, 20))
-diff_runtime = random_runtime - 10
 
-score = video_score_weight*video_cos_sim + audio_score_weight*audio_cos_sim + runtime_weight*diff_runtime
-print(video_score_weight*video_cos_sim, audio_score_weight*audio_cos_sim, runtime_weight*diff_runtime, score)
+runtime_upper_limit = min(base_runtime*2, random_runtime)
+diff_runtime = base_runtime - runtime_upper_limit
+runtime_scale = diff_runtime/10
+
+score = video_score_weight*video_cos_sim + audio_score_weight*audio_cos_sim + runtime_weight*runtime_scale
+print(video_score_weight*video_cos_sim, audio_score_weight*audio_cos_sim, runtime_weight*runtime_scale, score)
+
 # Expected output:
 #
 # Vision x Text:
